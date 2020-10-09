@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:audio_manager/audio_manager.dart';
+import 'package:flutter_itunes_player/apis/search_songs_api.dart';
+import 'package:flutter_itunes_player/models/song.dart';
+import 'package:flutter_itunes_player/widgets/music_controller.dart';
 
 void main() {
   runApp(MyApp());
@@ -8,88 +12,165 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter itunes player',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        brightness: Brightness.dark,
+        primarySwatch: Colors.green,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MusicPlayer(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
-
-  final String title;
-
+class MusicPlayer extends StatefulWidget {
+  MusicPlayer({Key key}) : super(key: key);
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  _MusicPlayerState createState() => _MusicPlayerState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _MusicPlayerState extends State<MusicPlayer> {
+  AudioManager audioManagerInstance = AudioManager.instance;
+  final TextEditingController _searchTextController = TextEditingController();
+  String _searchText = '';
+  List<Song> songs = <Song>[];
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  bool shouldShowControlPanel = false;
+  bool showResultCount = false;
+
+  int currentSongTrackId;
+
+  @override
+  void initState() {
+    super.initState();
+    setupAudioPlayerEvents();
+  }
+
+  _MusicPlayerState() {
+    _searchTextController.addListener(() {
+      if (_searchTextController.text.isEmpty) {
+        setState(() {
+          _searchText = '';
+        });
+      } else {
+        setState(() {
+          _searchText = _searchTextController.text;
+        });
+      }
+    });
+  }
+
+  PreferredSizeWidget searchBar(BuildContext context) {
+    return AppBar(
+      centerTitle: true,
+      title: TextField(
+        onEditingComplete: () async {
+          await getSongsFromServer(context);
+        },
+        controller: _searchTextController,
+        decoration: InputDecoration(hintText: 'Search artist...'),
+      ),
+      leading: IconButton(
+          icon: Icon(Icons.search),
+          onPressed: () async {
+            await getSongsFromServer(context);
+          }),
+    );
+  }
+
+  Future<void> getSongsFromServer(BuildContext context) async {
+    songs = await searchMusicByArtist(_searchText);
+    if (songs.isNotEmpty) {
+      showResultCount = true;
+    }
+    clearSearchBarInput(context);
+  }
+
+  void clearSearchBarInput(BuildContext context) {
+    FocusScope.of(context).unfocus();
+    _searchTextController.clear();
+  }
+
+  Widget songList(BuildContext context, List<Song> songs) {
+    return Expanded(
+      child: ListView.builder(
+        shrinkWrap: true,
+        scrollDirection: Axis.vertical,
+        itemCount: songs.length,
+        itemBuilder: (BuildContext context, int index) {
+          return ListTile(
+            selected: currentSongTrackId == songs[index].trackId,
+            leading: Image.network(songs[index].artworkUrl),
+            title: Text(songs[index].title),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[Text(songs[index].artistName), Text(songs[index].album)],
+            ),
+            isThreeLine: true,
+            onTap: () {
+              showControlPanel();
+              highlightCurrentTrack(songs[index].trackId);
+              playSelectedSong(songs, index);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  void playSelectedSong(List<Song> songs, int index) {
+    audioManagerInstance.start(songs[index].previewUrl, songs[index].title, cover: songs[index].artworkUrl);
+  }
+
+  void showControlPanel() {
+    shouldShowControlPanel = true;
+  }
+
+  void highlightCurrentTrack(int trackId) {
+    currentSongTrackId = trackId;
+  }
+
+  void setupAudioPlayerEvents() {
+    audioManagerInstance.onEvents((AudioManagerEvents events, dynamic args) {
+      switch (events) {
+        case AudioManagerEvents.start:
+          break;
+        case AudioManagerEvents.seekComplete:
+          setState(() {});
+          break;
+        case AudioManagerEvents.playstatus:
+          setState(() {});
+          break;
+        case AudioManagerEvents.ended:
+          audioManagerInstance.next();
+          currentSongTrackId = -1; // remove ui indication when a song is playing.
+          setState(() {});
+          break;
+        default:
+          break;
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
+      appBar: searchBar(context),
       body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
         child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
+            if (showResultCount) Text('Found ${songs.length} results', style: TextStyle(fontSize: 18)),
+            Container(child: songList(context, songs)),
+            if (shouldShowControlPanel) MusicController(audioManagerInstance),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
+  }
+
+  @override
+  void dispose() {
+    audioManagerInstance.stop();
+    super.dispose();
   }
 }
