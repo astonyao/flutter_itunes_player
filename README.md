@@ -1,6 +1,8 @@
 # flutter_itunes_player
 A flutter app which allows users to search for music using by artist name. It shows information about the song as well as a thumbnail. The app can play a 30 seconds preview on selected songs.
 
+![](app-preview.gif)
+
 ## Features implemented
 - Search and list songs by artist name.
 - Displays song’s title, artist, album and album art.
